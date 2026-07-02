@@ -2,7 +2,7 @@
 
 const {
   app, BrowserWindow, ipcMain, Tray, Menu, nativeImage,
-  shell, dialog, nativeTheme,
+  Notification, shell, dialog, nativeTheme,
 } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const Store = require('electron-store').default || require('electron-store');
@@ -10,17 +10,35 @@ const path = require('path');
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-const APP_URL   = 'https://ops.fuzzyreporting.com/';
+// The web app to load. Defaults to the live ops app; FWW_OPS_URL overrides it so
+// a local dev bundle (e.g. http://localhost:8971 from `apps/web` npm run dev) can
+// be tested inside the real shell — needed to verify embedded <webview> views
+// against local changes before they're deployed to ops.fuzzyreporting.com.
+const APP_URL   = process.env.FWW_OPS_URL || 'https://ops.fuzzyreporting.com/';
 const APP_NAME  = 'FWW Ops';
 const ICON_PATH = path.join(__dirname, 'assets', 'icon.png');
 
-// Hosts allowed to open as in-app popups (the Google OAuth / Cloudflare Access
-// flow). Anything else opens in the user's default browser.
-const AUTH_HOSTS = [
-  'https://ops.fuzzyreporting.com',
-  'https://accounts.google.com',
-  'https://fuzzywumpets.cloudflareaccess.com',
-];
+// Persistent session partition holding the Cloudflare Access identity cookie.
+// The main window AND every embedded <webview> share it, so ONE team-level CF
+// Access sign-in silently covers every embedded FWW app (Booths, HQ, Pattern
+// Manager, Shipping…). MUST match the <webview partition> the web app sets.
+const SESSION_PARTITION = 'persist:fwwops';
+
+// A popup/navigation whose host is Google, a Cloudflare Access team domain, or
+// any *.fuzzyreporting.com app opens IN-APP (so the OAuth / CF Access login flow
+// and embedded-app auth popups work); everything else goes to the OS browser.
+function isInAppPopup(url) {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:') return false;
+    return (
+      u.hostname === 'accounts.google.com' ||
+      u.hostname.endsWith('.cloudflareaccess.com') ||
+      u.hostname === 'fuzzyreporting.com' ||
+      u.hostname.endsWith('.fuzzyreporting.com')
+    );
+  } catch { return false; }
+}
 
 // ─── Persistent settings (window bounds only) ────────────────────────────────
 
@@ -61,7 +79,7 @@ function openPdfWindow(url) {
     icon: ICON_PATH,
     backgroundColor: '#ffffff',
     autoHideMenuBar: true,
-    webPreferences: { partition: 'persist:fwwops' },
+    webPreferences: { partition: SESSION_PARTITION },
   });
   win.setMenuBarVisibility(false);
   win.on('closed', () => { pdfWindows = pdfWindows.filter((w) => w !== win); });
@@ -92,6 +110,35 @@ app.on('window-all-closed', () => {
   // Closing the window fully exits — no lingering background instance holding the
   // single-instance lock and blocking reopen.
   app.quit();
+});
+
+// ─── Embedded <webview> hardening + popup routing ──────────────────────────────
+//
+// Embedded apps are rendered by the web layer as <webview> tags (see the ops web
+// app's embed modules). These app-level hooks apply to EVERY webview:
+//   * will-attach-webview — strip any preload, force no node integration (defense
+//     in depth; the embedded app is remote and untrusted-ish).
+//   * web-contents-created — for webview contents, route popups: OAuth / CF Access
+//     / fuzzyreporting apps open in-app; PDFs to a PDF window; everything else to
+//     the OS browser. Without this an embedded app's "Sign in with Google" popup
+//     would be blocked or hijacked to the external browser and auth would break.
+
+app.on('will-attach-webview', (_event, webPreferences, params) => {
+  delete webPreferences.preload;
+  webPreferences.nodeIntegration = false;
+  webPreferences.contextIsolation = true;
+  // params.partition comes from the <webview partition="persist:fwwops"> attribute
+  // (the web app sets it) so the CF Access session is shared — leave it as-is.
+});
+
+app.on('web-contents-created', (_event, contents) => {
+  if (contents.getType() !== 'webview') return;
+  contents.setWindowOpenHandler(({ url }) => {
+    if (isPdfUrl(url)) { openPdfWindow(url); return { action: 'deny' }; }
+    if (isInAppPopup(url)) return { action: 'allow' };
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
 });
 
 // ─── Application menu ──────────────────────────────────────────────────────────
@@ -161,8 +208,12 @@ function createMainWindow() {
       nodeIntegration:  false,
       // Persist cookies so the Cloudflare Access / Google session survives
       // restarts — same approach as FWW Shipping / B2B Admin.
-      partition:        'persist:fwwops',
+      partition:        SESSION_PARTITION,
       spellcheck:       true,
+      // Allow <webview> tags so the web app can embed other FWW apps as left-nav
+      // views. Each webview is its own top-level webContents (NOT an iframe), so
+      // X-Frame-Options / frame-ancestors never apply to CF-Access apps.
+      webviewTag:       true,
     },
   });
 
@@ -182,10 +233,11 @@ function createMainWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 
-  // Let the OAuth / Access popup open in-app; send everything else to the browser.
+  // Let the OAuth / Access popup (and embedded-app auth popups) open in-app; send
+  // everything else to the browser.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (isPdfUrl(url)) { openPdfWindow(url); return { action: 'deny' }; }
-    if (AUTH_HOSTS.some((h) => url.startsWith(h))) return { action: 'allow' };
+    if (isInAppPopup(url)) return { action: 'allow' };
     shell.openExternal(url);
     return { action: 'deny' };
   });
@@ -228,6 +280,46 @@ function createTray() {
 // ─── IPC ───────────────────────────────────────────────────────────────────────
 
 ipcMain.handle('app:version', () => app.getVersion());
+
+// Native notifications + taskbar badge bridge (window.fwwOps in preload). The ops
+// web app's shell-push module calls these on live chat events so a native OS
+// notification fires and the taskbar shows an unread badge even when the window
+// is unfocused. Clicking a notification focuses the window and forwards its route.
+ipcMain.on('fwwops:notify', (_event, payload) => {
+  try {
+    if (!payload || typeof payload !== 'object' || !Notification.isSupported()) return;
+    const n = new Notification({
+      title: String(payload.title || APP_NAME),
+      body:  String(payload.body || ''),
+      silent: !!payload.silent,
+    });
+    n.on('click', () => {
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+      const route = typeof payload.url === 'string' ? payload.url : null;
+      if (route) mainWindow?.webContents.send('fwwops:activate-notification', { url: route, tag: payload.tag });
+    });
+    n.show();
+  } catch (_) { /* notifications must never crash the app */ }
+});
+
+ipcMain.on('fwwops:set-badge', (_event, count) => {
+  try {
+    const n = Math.max(0, Number(count) || 0);
+    // Windows has no numeric dock badge; a non-empty overlay dot signals unread.
+    if (typeof app.setBadgeCount === 'function') app.setBadgeCount(n);
+    if (mainWindow && process.platform === 'win32') {
+      if (n > 0) {
+        const dot = nativeImage.createFromPath(ICON_PATH).resize({ width: 16, height: 16 });
+        mainWindow.setOverlayIcon(dot, `${n} unread`);
+      } else {
+        mainWindow.setOverlayIcon(null, '');
+      }
+    }
+  } catch (_) {}
+});
 
 // ─── Auto updater ─────────────────────────────────────────────────────────────
 //

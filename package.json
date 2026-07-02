@@ -1,7 +1,7 @@
 {
   "name": "fww-ops-desktop",
-  "version": "1.0.0",
-  "description": "Fuzzywumpets Ops — desktop shell with auto-update",
+  "version": "1.1.0",
+  "description": "Fuzzywumpets Ops — desktop shell with auto-update + embedded app views",
   "author": "Fuzzywumpets",
   "main": "main.js",
   "scripts": {
