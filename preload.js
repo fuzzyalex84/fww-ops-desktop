@@ -17,6 +17,9 @@ contextBridge.exposeInMainWorld('__fwwDesktop', {
   canEmbed: true, // this window sets webPreferences.webviewTag = true
   getVersion: () => ipcRenderer.invoke('app:version'),
   onUpdaterStatus: (cb) => ipcRenderer.on('updater:status', (_e, status) => cb(status)),
+  // Open a URL in the OS browser (used by the embed launch/error card's "Open in
+  // browser" button so it doesn't just open another in-app window).
+  openExternal: (url) => ipcRenderer.invoke('app:open-external', url),
 });
 
 contextBridge.exposeInMainWorld('fwwOps', {

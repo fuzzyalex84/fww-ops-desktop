@@ -24,20 +24,33 @@ const ICON_PATH = path.join(__dirname, 'assets', 'icon.png');
 // Manager, Shipping…). MUST match the <webview partition> the web app sets.
 const SESSION_PARTITION = 'persist:fwwops';
 
-// A popup/navigation whose host is Google, a Cloudflare Access team domain, or
-// any *.fuzzyreporting.com app opens IN-APP (so the OAuth / CF Access login flow
-// and embedded-app auth popups work); everything else goes to the OS browser.
+// EXACT host allow-lists (hardened per adversarial review H1): only these hosts
+// open a popup IN-APP. A bare `*.fuzzyreporting.com` wildcard was too broad — any
+// stray/compromised subdomain (open redirect, preview deploy, user-content) would
+// have loaded inside the shared CF Access session. So we pin the exact embed
+// targets + the exact OAuth / CF Access login hosts; everything else → OS browser.
+const EMBED_HOSTS = new Set([
+  'ops.fuzzyreporting.com',       // the ops app itself (main window)
+  'shipping.fuzzyreporting.com',  // embedded Shipping (Live)
+  'booths.fuzzyreporting.com',    // embedded Booth Sales
+  'pattern.fuzzyreporting.com',   // embedded Pattern Manager
+  'hq.fuzzyreporting.com',        // embedded HQ
+]);
+const AUTH_HOSTS = new Set([
+  'accounts.google.com',                 // Google sign-in
+  'accounts.googleusercontent.com',      // Google sign-in asset host
+  'fuzzywumpets.cloudflareaccess.com',   // the CF Access team login
+]);
+
+function httpsHost(url) {
+  try { const u = new URL(url); return u.protocol === 'https:' ? u.hostname.toLowerCase() : null; }
+  catch { return null; }
+}
+
+// True if a popup to `url` may open IN-APP (auth flow or one of our own apps).
 function isInAppPopup(url) {
-  try {
-    const u = new URL(url);
-    if (u.protocol !== 'https:') return false;
-    return (
-      u.hostname === 'accounts.google.com' ||
-      u.hostname.endsWith('.cloudflareaccess.com') ||
-      u.hostname === 'fuzzyreporting.com' ||
-      u.hostname.endsWith('.fuzzyreporting.com')
-    );
-  } catch { return false; }
+  const h = httpsHost(url);
+  return !!h && (EMBED_HOSTS.has(h) || AUTH_HOSTS.has(h));
 }
 
 // ─── Persistent settings (window bounds only) ────────────────────────────────
@@ -123,7 +136,7 @@ app.on('window-all-closed', () => {
 //     the OS browser. Without this an embedded app's "Sign in with Google" popup
 //     would be blocked or hijacked to the external browser and auth would break.
 
-app.on('will-attach-webview', (_event, webPreferences, params) => {
+app.on('will-attach-webview', (_event, webPreferences, _params) => {
   delete webPreferences.preload;
   webPreferences.nodeIntegration = false;
   webPreferences.contextIsolation = true;
@@ -131,14 +144,34 @@ app.on('will-attach-webview', (_event, webPreferences, params) => {
   // (the web app sets it) so the CF Access session is shared — leave it as-is.
 });
 
+// The ONE window-open policy, applied to EVERY webContents (main window, embedded
+// webviews, AND popup children). Hardened per review H3: an allowed popup is
+// created with locked-down webPreferences (no node, isolation, sandbox, shared
+// session) rather than inheriting defaults, and — because this handler is applied
+// to every new webContents — a popup child is governed too (it can't then open
+// arbitrary further windows). PDFs → in-app PDF window; auth/embed hosts →
+// hardened in-app popup; everything else → OS browser.
+function windowOpenRouter({ url }) {
+  if (isPdfUrl(url)) { openPdfWindow(url); return { action: 'deny' }; }
+  if (isInAppPopup(url)) {
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        webPreferences: {
+          partition: SESSION_PARTITION,
+          contextIsolation: true,
+          nodeIntegration: false,
+          sandbox: true,
+        },
+      },
+    };
+  }
+  shell.openExternal(url);
+  return { action: 'deny' };
+}
+
 app.on('web-contents-created', (_event, contents) => {
-  if (contents.getType() !== 'webview') return;
-  contents.setWindowOpenHandler(({ url }) => {
-    if (isPdfUrl(url)) { openPdfWindow(url); return { action: 'deny' }; }
-    if (isInAppPopup(url)) return { action: 'allow' };
-    shell.openExternal(url);
-    return { action: 'deny' };
-  });
+  contents.setWindowOpenHandler(windowOpenRouter);
 });
 
 // ─── Application menu ──────────────────────────────────────────────────────────
@@ -233,14 +266,9 @@ function createMainWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 
-  // Let the OAuth / Access popup (and embedded-app auth popups) open in-app; send
-  // everything else to the browser.
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    if (isPdfUrl(url)) { openPdfWindow(url); return { action: 'deny' }; }
-    if (isInAppPopup(url)) return { action: 'allow' };
-    shell.openExternal(url);
-    return { action: 'deny' };
-  });
+  // Popups (OAuth / CF Access / embedded-app auth) are governed by the app-level
+  // windowOpenRouter (app.on('web-contents-created')), which also hardens the
+  // child window — so no per-window setWindowOpenHandler is needed here.
 
   // A plain (same-window) navigation to a PDF would strand the main window on an
   // inline PDF with no back button. Intercept ONLY PDF navigations into their own
@@ -280,6 +308,13 @@ function createTray() {
 // ─── IPC ───────────────────────────────────────────────────────────────────────
 
 ipcMain.handle('app:version', () => app.getVersion());
+
+// Open a URL in the OS browser (the web app's "Open in browser" affordance). Only
+// https URLs are honored so the renderer can't ask the shell to open arbitrary
+// schemes (file:, etc.).
+ipcMain.handle('app:open-external', (_event, url) => {
+  if (typeof url === 'string' && /^https:\/\//i.test(url)) shell.openExternal(url);
+});
 
 // Native notifications + taskbar badge bridge (window.fwwOps in preload). The ops
 // web app's shell-push module calls these on live chat events so a native OS
