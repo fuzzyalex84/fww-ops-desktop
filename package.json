@@ -40,7 +40,8 @@
       ],
       "icon": "assets/icon.ico",
       "requestedExecutionLevel": "asInvoker",
-      "publisherName": "Fuzzywumpets"
+      "publisherName": "Fuzzywumpets",
+      "artifactName": "FWW-Ops-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": true,
