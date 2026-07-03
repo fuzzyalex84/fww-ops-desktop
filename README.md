@@ -50,7 +50,20 @@ on their next launch.
 
 ## Install
 
-Download the latest `FWW Ops Setup x.y.z.exe` from the
-[Releases page](https://github.com/fuzzyalex84/fww-ops-desktop/releases) and run
-it. Unsigned, so Windows SmartScreen shows an "unknown publisher" prompt on first
-run — click **More info → Run anyway** (expected for internal tools).
+**Recommended — one line, zero friction.** Open PowerShell (no admin needed) and run:
+
+```powershell
+irm https://raw.githubusercontent.com/fuzzyalex84/fww-ops-desktop/master/install.ps1 | iex
+```
+
+This downloads the latest release and installs it silently, per-user. It skips ALL
+the double-click friction — no browser Captcha, no SmartScreen "unknown publisher",
+no "mark as safe" — because a programmatic download isn't tagged with Mark-of-the-Web
+and a silent install never shows the SmartScreen dialog. Run it once per PC; the app
+auto-updates from then on. Then sign in with your `@fuzzywumpets.com` Google account.
+
+**Manual (has the SmartScreen prompt).** Download `FWW-Ops-Setup-x.y.z.exe` from the
+[Releases page](https://github.com/fuzzyalex84/fww-ops-desktop/releases) and run it.
+Because it's unsigned, Windows SmartScreen shows an "unknown publisher" warning —
+click **More info → Run anyway**. (The one-liner above avoids this entirely; the only
+way to remove it for browser downloads is code-signing the installer.)
