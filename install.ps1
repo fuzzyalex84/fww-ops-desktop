@@ -1,4 +1,4 @@
-# FWW Ops — one-line installer.
+# Fuzzywumpets Ops — one-line installer.
 #
 #   irm https://raw.githubusercontent.com/fuzzyalex84/fww-ops-desktop/master/install.ps1 | iex
 #
@@ -12,9 +12,9 @@
 $ErrorActionPreference = 'Stop'
 $repo = 'fuzzyalex84/fww-ops-desktop'
 
-Write-Host "Fetching the latest FWW Ops release..." -ForegroundColor Cyan
+Write-Host "Fetching the latest Fuzzywumpets Ops release..." -ForegroundColor Cyan
 $rel   = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{ 'User-Agent' = 'fww-ops-install' }
-$asset = $rel.assets | Where-Object { $_.name -like 'FWW-Ops-Setup-*.exe' } | Select-Object -First 1
+$asset = $rel.assets | Where-Object { $_.name -like 'Fuzzywumpets-Ops-Setup-*.exe' } | Select-Object -First 1
 if (-not $asset) { throw "No installer asset found on the latest release ($($rel.tag_name))." }
 
 $out = Join-Path $env:TEMP $asset.name
@@ -25,11 +25,11 @@ Write-Host "Installing (silent, per-user)..." -ForegroundColor Cyan
 $p = Start-Process $out -ArgumentList '/S' -Wait -PassThru
 if ($p.ExitCode -ne 0) { throw "Installer exited with code $($p.ExitCode)." }
 
-$exe = Join-Path $env:LOCALAPPDATA 'Programs\fww-ops-desktop\FWW Ops.exe'
-Write-Host ("Installed FWW Ops {0}." -f ($rel.tag_name -replace '^v','')) -ForegroundColor Green
+$exe = Join-Path $env:LOCALAPPDATA 'Programs\fww-ops-desktop\Fuzzywumpets Ops.exe'
+Write-Host ("Installed Fuzzywumpets Ops {0}." -f ($rel.tag_name -replace '^v','')) -ForegroundColor Green
 if (Test-Path $exe) {
   Write-Host "Launching — sign in with your @fuzzywumpets.com Google account." -ForegroundColor Green
   Start-Process $exe
 } else {
-  Write-Host "Installed. Find 'FWW Ops' in the Start Menu." -ForegroundColor Green
+  Write-Host "Installed. Find 'Fuzzywumpets Ops' in the Start Menu." -ForegroundColor Green
 }

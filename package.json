@@ -1,6 +1,6 @@
 {
   "name": "fww-ops-desktop",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Fuzzywumpets Ops — desktop shell with auto-update + embedded app views",
   "author": "Fuzzywumpets",
   "main": "main.js",
@@ -21,7 +21,7 @@
   },
   "build": {
     "appId": "com.fuzzywumpets.fwwops",
-    "productName": "FWW Ops",
+    "productName": "Fuzzywumpets Ops",
     "copyright": "Copyright © 2026 Fuzzywumpets",
     "icon": "assets/icon.png",
     "publish": {
@@ -41,7 +41,7 @@
       "icon": "assets/icon.ico",
       "requestedExecutionLevel": "asInvoker",
       "publisherName": "Fuzzywumpets",
-      "artifactName": "FWW-Ops-Setup-${version}.${ext}"
+      "artifactName": "Fuzzywumpets-Ops-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": true,
@@ -52,7 +52,7 @@
       "installerHeaderIcon": "assets/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "FWW Ops",
+      "shortcutName": "Fuzzywumpets Ops",
       "runAfterFinish": true,
       "deleteAppDataOnUninstall": false
     },

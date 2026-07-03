@@ -1,4 +1,4 @@
-# FWW Ops — Desktop
+# Fuzzywumpets Ops — Desktop
 
 A thin Electron desktop shell around **https://ops.fuzzyreporting.com/** — the
 unified Fuzzywumpets order-management + employee-comms app. Built to mirror
@@ -6,7 +6,7 @@ unified Fuzzywumpets order-management + employee-comms app. Built to mirror
 
 ## What it does
 
-- Opens FWW Ops in its own window with a green **Ops** app icon (desktop +
+- Opens Fuzzywumpets Ops in its own window with a green **Ops** app icon (desktop +
   Start-menu shortcut, system-tray icon).
 - **Authentication:** the window uses a persistent session partition
   (`persist:fwwops`), so the Cloudflare Access / **Sign in with Google** flow runs
@@ -62,7 +62,7 @@ no "mark as safe" — because a programmatic download isn't tagged with Mark-of-
 and a silent install never shows the SmartScreen dialog. Run it once per PC; the app
 auto-updates from then on. Then sign in with your `@fuzzywumpets.com` Google account.
 
-**Manual (has the SmartScreen prompt).** Download `FWW-Ops-Setup-x.y.z.exe` from the
+**Manual (has the SmartScreen prompt).** Download `Fuzzywumpets-Ops-Setup-x.y.z.exe` from the
 [Releases page](https://github.com/fuzzyalex84/fww-ops-desktop/releases) and run it.
 Because it's unsigned, Windows SmartScreen shows an "unknown publisher" warning —
 click **More info → Run anyway**. (The one-liner above avoids this entirely; the only

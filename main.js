@@ -15,7 +15,7 @@ const path = require('path');
 // be tested inside the real shell — needed to verify embedded <webview> views
 // against local changes before they're deployed to ops.fuzzyreporting.com.
 const APP_URL   = process.env.FWW_OPS_URL || 'https://ops.fuzzyreporting.com/';
-const APP_NAME  = 'FWW Ops';
+const APP_NAME  = 'Fuzzywumpets Ops';
 const ICON_PATH = path.join(__dirname, 'assets', 'icon.png');
 
 // Persistent session partition holding the Cloudflare Access identity cookie.
